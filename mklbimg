@@ -9,6 +9,25 @@ mlb_path="$HOME/mlb"
 mlb_file="$mlb_path/mlb.bin"
 mlb_cmd="$mlb_path/mlbinstall"
 
+if [[ ! -f "$kernel_file" || ! -r "$kernel_file" ]]; then
+	echo "kernel file doesn't exist, is not a file or is not readable: $kernel_file" 1>&2
+	exit 1
+fi
+if [[ ! -f "$root_file" || ! -r "$root_file" ]]; then
+	echo "rootfs file doesn't exist, is not a file or is not readable: $root_file" 1>&2
+	exit 1
+fi
+if [[ ! -f "$mlb_file" || ! -r "$mlb_file" ]]; then
+	echo "MLB boot sector file doesn't exist, is not a file or is not readable: $mlb_file" 1>&2
+	echo "try \`make -C \"$mlb_path\"\`" 1>&2
+	exit 1
+fi
+if [[ ! -f "$mlb_cmd" || ! -x "$mlb_cmd" ]]; then
+	echo "MLB install command doesn't exist, is not a file or is not executable: $mlb_cmd" 1>&2
+	echo "try \`make -C \"$mlb_path\"\`" 1>&2
+	exit 1
+fi
+
 mlb_size=$(stat -c '%s' "$mlb_file")
 
 sfdisk="/sbin/sfdisk"
