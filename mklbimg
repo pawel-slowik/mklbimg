@@ -6,7 +6,11 @@ qemu_image_file="image.qcow2"
 raw_image_file="image.raw"
 
 mlb_path="$HOME/mlb"
-mlb_size=$(stat -c '%s' "$mlb_path/mlb.bin")
+mlb_file="$mlb_path/mlb.bin"
+mlb_cmd="$mlb_path/mlbinstall"
+
+mlb_size=$(stat -c '%s' "$mlb_file")
+
 sfdisk="/sbin/sfdisk"
 
 # partition sizes calculated in cylinders for old / buggy versions of sfdisk
@@ -59,7 +63,7 @@ dd if="$kernel_file" of="$raw_image_file" bs=$sector_size seek=$kernel_offset co
 dd if="$root_file" of="$raw_image_file" bs=$sector_size seek=$root_offset conv=notrunc
 
 # install MLB
-$mlb_path/mlbinstall "$raw_image_file" "$kernel_file" "root=/dev/sda2 rw"
+"$mlb_cmd" "$raw_image_file" "$kernel_file" "root=/dev/sda2 rw"
 
 # mlbinstall computes kernel LBA using the real / mounted disc drive.
 # We need to replace this with LBA computed using VM disc image.
