@@ -1,0 +1,80 @@
+#!/bin/bash
+
+kernel_file="bzImage"
+root_file="rootfs.ext2"
+qemu_image_file="image.qcow2"
+raw_image_file="image.raw"
+
+mlb_path="$HOME/mlb"
+mlb_size=$(stat -c '%s' "$mlb_path/mlb.bin")
+sfdisk="/sbin/sfdisk"
+
+# partition sizes calculated in cylinders for old / buggy versions of sfdisk
+# https://bugs.launchpad.net/ubuntu/+source/util-linux/+bug/1481158
+sector_size=512
+sectors=63
+heads=255
+cylinder_size=$(($sector_size * $sectors * $heads))
+kernel_size=$(stat -c '%s' "$kernel_file")
+root_size=$(stat -c '%s' "$root_file")
+kernel_cylinders=$(($kernel_size / $cylinder_size))
+if [[ $(($kernel_size % $cylinder_size)) != 0 ]]; then
+	kernel_cylinders=$(($kernel_cylinders + 1))
+fi
+root_cylinders=$(($root_size / $cylinder_size))
+if [[ $(($root_size % $cylinder_size)) != 0 ]]; then
+	root_cylinders=$(($root_cylinders + 1))
+fi
+total_cylinders=$(($kernel_cylinders + $root_cylinders))
+
+# create empty disc image
+dd if=/dev/zero of="$raw_image_file" bs=$cylinder_size count=$total_cylinders
+
+# create partitions
+echo -e ",$kernel_cylinders,L,*\n,,L" | $sfdisk -H $heads -S $sectors "$raw_image_file"
+
+# read offsets of kernel and root partitions, in sectors
+kernel_offset=0
+root_offset=0
+list_flag=0
+set -f
+while read line; do
+	if [[ $list_flag -eq 1 ]]; then
+		if [[ $line =~ ^[^[:space:]]+1[[:space:]] ]]; then
+			words=($line)
+			kernel_offset=${words[2]}
+		fi
+		if [[ $line =~ ^[^[:space:]]+2[[:space:]] ]]; then
+			words=($line)
+			root_offset=${words[1]}
+		fi
+	fi
+	if [[ $line =~ \#sectors ]]; then
+		list_flag=1
+	fi
+done < <($sfdisk -uS -H $heads -S $sectors -l "$raw_image_file")
+
+# write kernel and root partitions into disk image
+dd if="$kernel_file" of="$raw_image_file" bs=$sector_size seek=$kernel_offset conv=notrunc
+dd if="$root_file" of="$raw_image_file" bs=$sector_size seek=$root_offset conv=notrunc
+
+# install MLB
+$mlb_path/mlbinstall "$raw_image_file" "$kernel_file" "root=/dev/sda2 rw"
+
+# mlbinstall computes kernel LBA using the real / mounted disc drive.
+# We need to replace this with LBA computed using VM disc image.
+# First, encode $kernel_offset to 4 bytes:
+input=$kernel_offset
+divisors=(16777216 65536 256 1)
+buf=""
+for ((i = 0; $i < ${#divisors[@]}; i++)); do
+	buf=$(printf "%02x " $(($input / ${divisors[$i]})))" $buf"
+	input=$(($input % ${divisors[$i]}))
+done
+# Then, write encoded offset at the end of MLB code:
+mlb_last_byte_offset=$(($mlb_size - 1))
+mlb_lba_offset=$(($mlb_last_byte_offset - ${#divisors[@]}))
+echo "$buf" | xxd -p -r -seek $mlb_lba_offset - "$raw_image_file"
+
+# convert raw image to qemu format
+qemu-img convert -f raw -p -O qcow2 "$raw_image_file" "$qemu_image_file"
