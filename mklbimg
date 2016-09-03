@@ -30,7 +30,24 @@ fi
 
 mlb_size=$(stat -c '%s' "$mlb_file")
 
-sfdisk="/sbin/sfdisk"
+# as this script is intended to be run from non-root accounts, sfdisk might
+# not be in $PATH
+admin_paths=("/sbin" "/usr/sbin" "/usr/local/sbin")
+sfdisk_test=$(which sfdisk 2> /dev/null)
+if [[ $? -eq 0 ]]; then
+	sfdisk="$sfdisk_test"
+else
+	for p in ${admin_paths[@]}; do
+		if [[ -f "$p/sfdisk" && -x "$p/sfdisk" ]]; then
+			sfdisk="$p/sfdisk"
+			break
+		fi
+	done
+fi
+if [[ -z $sfdisk ]]; then
+	echo "sfdisk executable not found, searched in: ${admin_paths[@]}" 1>&2
+	exit 1
+fi
 
 # partition sizes calculated in cylinders for old / buggy versions of sfdisk
 # https://bugs.launchpad.net/ubuntu/+source/util-linux/+bug/1481158
