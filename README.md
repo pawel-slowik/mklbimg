@@ -3,6 +3,9 @@ from [Buildroot](https://buildroot.org/) kernel and root filesystem images.
 [MLB](https://wiktorb.eu/mlb/) is used for the actual booting.
 Works only with x86 / x86\_64 images.
 
+Note: this repository is no longer maintained. The project it was originally
+used for has switched from using Buildroot to vendor provided images.
+
 ## Rationale
 
 I wanted a system that would run completely automated / unattended
